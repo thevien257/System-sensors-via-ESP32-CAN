@@ -48,6 +48,17 @@ void IRAM_ATTR handleButtonInterrupt() {
   digitalWrite(BUZZER, !buttonState);
 }
 
+// ==== CAN Send with retry ====
+bool sendCANWithRetry(CanFrame& frame, uint8_t maxRetries = 3) {
+  for (uint8_t i = 0; i < maxRetries; i++) {
+    if (ESP32Can.writeFrame(frame)) {
+      return true;
+    }
+    delayMicroseconds(100);  // Short delay between retries
+  }
+  return false;
+}
+
 // ==== TASK HANDLERS ====
 void handleDHTTask() {
   readDHTFlag = false;
@@ -76,7 +87,7 @@ void handleDHTTask() {
   txFrame.data[2] = humi & 0xFF;
   txFrame.data[3] = (humi >> 8) & 0xFF;
 
-  if (ESP32Can.writeFrame(txFrame)) {
+  if (sendCANWithRetry(txFrame)) {
     Serial.println("CAN Sent: Temp & Humi");
   } else {
     Serial.println("CAN Send Fail!");

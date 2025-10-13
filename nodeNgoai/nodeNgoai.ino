@@ -17,8 +17,8 @@ ESP32Timer ITimer0(0);  // Timer0 → LDR
 ESP32Timer ITimer1(1);  // Timer1 cho Ultrasonic
 
 // ==== Chu kỳ đọc ====
-#define LDR_INTERVAL_MS 550
-#define US_INTERVAL_MS 500
+#define LDR_INTERVAL_MS 100
+#define US_INTERVAL_MS 100
 
 // ==== Flags ====
 volatile bool readLDRFlag = false;
