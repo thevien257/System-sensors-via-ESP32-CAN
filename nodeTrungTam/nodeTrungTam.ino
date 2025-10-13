@@ -33,23 +33,7 @@ const char *daysOfWeek[7] = {
 // CAN RX Interrupt callback - processes everything immediately
 void onCANReceive(const CanFrame &frame) {
   // DHT11 Temperature & Humidity (ID = 0x101)
-  if (frame.identifier == 0x101 && frame.data_length_code == 4) {
-    int16_t temp_raw = frame.data[0] | (frame.data[1] << 8);
-    int16_t humi_raw = frame.data[2] | (frame.data[3] << 8);
-    float temp = temp_raw / 10.0;
-    float humi = humi_raw / 10.0;
-
-    // Serial.printf(">> DHT11: Temp = %.1f °C | Humi = %.1f %%\n", temp, humi);
-
-    char buf[64];
-    sprintf(buf, "%.1fC", temp);
-    tTemp.setText(buf);
-
-    sprintf(buf, "%.1f%%", humi);
-    tHumi.setText(buf);
-  }
-
-  else if (frame.identifier == 0x01 && frame.data_length_code == 7) {
+  if (frame.identifier == 0x01 && frame.data_length_code == 7) {
     uint8_t hour = frame.data[0];
     uint8_t minute = frame.data[1];
     uint8_t second = frame.data[2];
@@ -58,9 +42,6 @@ void onCANReceive(const CanFrame &frame) {
     uint16_t year = 2000 + frame.data[5];
     uint8_t dow = frame.data[6];
 
-    // Serial.printf(">> RTC: %s %02d:%02d:%02d  %02d/%02d/%04d\n",
-    //               daysOfWeek[dow], hour, minute, second, day, month, year);
-
     char buf[64];
     sprintf(buf, "%02d:%02d:%02d", hour, minute, second);
     tTime.setText(buf);
@@ -68,15 +49,26 @@ void onCANReceive(const CanFrame &frame) {
     sprintf(buf, "%s %02d/%02d/%04d", daysOfWeek[dow], day, month, year);
     tDate.setText(buf);
   }
-
-  // Ultrasonic Distance (ID = 0x103)
-  else if (frame.identifier == 0x103 && frame.data_length_code == 1) {
+  // Ultrasonic Distance (ID = 0x02)
+  if (frame.identifier == 0x02 && frame.data_length_code == 1) {
     uint16_t distance = frame.data[0];
-    // Serial.printf(">> Ultrasonic Distance = %d cm\n", distance);
 
     char buf[64];
     sprintf(buf, "%dcm", distance);
     tDis.setText(buf);
+  }
+  if (frame.identifier == 0x03 && frame.data_length_code == 4) {
+    int16_t temp_raw = frame.data[0] | (frame.data[1] << 8);
+    int16_t humi_raw = frame.data[2] | (frame.data[3] << 8);
+    float temp = temp_raw / 10.0;
+    float humi = humi_raw / 10.0;
+
+    char buf[64];
+    sprintf(buf, "%.1fC", temp);
+    tTemp.setText(buf);
+
+    sprintf(buf, "%.1f%%", humi);
+    tHumi.setText(buf);
   }
 }
 

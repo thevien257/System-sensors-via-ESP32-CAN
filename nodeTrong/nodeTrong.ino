@@ -26,8 +26,8 @@ ESP32Timer ITimer0(0);  // Timer0 → DHT11
 ESP32Timer ITimer1(1);  // Timer1 → RTC
 
 // ==== Chu kỳ đọc ====
-#define DHT_INTERVAL_MS 2000
-#define RTC_INTERVAL_MS 200
+#define DHT_INTERVAL_MS 5000
+#define RTC_INTERVAL_MS 1000
 
 // ==== Flags ====
 volatile bool readDHTFlag = false;
@@ -48,17 +48,6 @@ void IRAM_ATTR handleButtonInterrupt() {
   digitalWrite(BUZZER, !buttonState);
 }
 
-// ==== CAN Send with retry ====
-bool sendCANWithRetry(CanFrame& frame, uint8_t maxRetries = 3) {
-  for (uint8_t i = 0; i < maxRetries; i++) {
-    if (ESP32Can.writeFrame(frame)) {
-      return true;
-    }
-    delayMicroseconds(100);  // Short delay between retries
-  }
-  return false;
-}
-
 // ==== TASK HANDLERS ====
 void handleDHTTask() {
   readDHTFlag = false;
@@ -74,7 +63,7 @@ void handleDHTTask() {
 
   // Đóng gói dữ liệu DHT vào CAN (ID = 0x101)
   CanFrame txFrame = { 0 };
-  txFrame.identifier = 0x101;
+  txFrame.identifier = 0x03;
   txFrame.extd = 0;
   txFrame.data_length_code = 4;  // 2 float được scale nhỏ hơn
 
@@ -87,7 +76,7 @@ void handleDHTTask() {
   txFrame.data[2] = humi & 0xFF;
   txFrame.data[3] = (humi >> 8) & 0xFF;
 
-  if (sendCANWithRetry(txFrame)) {
+  if (ESP32Can.writeFrame(txFrame)) {
     Serial.println("CAN Sent: Temp & Humi");
   } else {
     Serial.println("CAN Send Fail!");
