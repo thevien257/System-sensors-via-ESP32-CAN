@@ -92,7 +92,7 @@ void setup() {
   }
 
   // ==== CAN init có retry và reset ====
-  if (ESP32Can.begin(TWAI_SPEED_500KBPS, CAN_TX, CAN_RX)) {
+  if (ESP32Can.begin(TWAI_SPEED_1000KBPS, CAN_TX, CAN_RX)) {
     Serial.println("CAN bus started successfully!");
   } else {
     Serial.println("CAN bus failed to start after retries! Restarting...");

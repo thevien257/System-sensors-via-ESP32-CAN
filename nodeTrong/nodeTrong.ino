@@ -140,7 +140,7 @@ void setup() {
   ITimer1.attachInterruptInterval(RTC_INTERVAL_MS * 1000, TimerHandler1);
 
   // ==== Init CAN (có timeout & auto-reset) ====
-  if (ESP32Can.begin(TWAI_SPEED_500KBPS, CAN_TX, CAN_RX)) {
+  if (ESP32Can.begin(TWAI_SPEED_1000KBPS, CAN_TX, CAN_RX)) {
 
   } else {
     Serial.println("CAN bus failed to start after retries! Restarting...");

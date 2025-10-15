@@ -26,6 +26,14 @@ const char
     "Thursday", "Friday", "Saturday"
   };
 
+/*Tại sao dùng ngắt?
+CAN bus ở tốc độ 1 Mbps có thể nhận hàng trăm frame/giây:
+Ngắt đảm bảo: ngay khi frame đến → callback được gọi → xử lý ngay
+Khi loop() đang xử lý Nextion (sSlider.getValue()), CAN message có thể đến nhưng không được đọc kịp 
+
+Không phải check liên tục (polling), chỉ cần check khi tin nhắn đến.
+*/
+
 void CAN_RECEIVE(const CanFrame &rxFrame) {
   char buff[64];
   if (rxFrame.identifier == 0x01 && rxFrame.data_length_code == 7) {
@@ -78,7 +86,7 @@ void setup() {
   digitalWrite(IN1, HIGH);
   digitalWrite(IN2, LOW);
 
-  if (ESP32Can.begin(TWAI_SPEED_500KBPS, CAN_TX, CAN_RX)) {
+  if (ESP32Can.begin(TWAI_SPEED_1000KBPS, CAN_TX, CAN_RX)) {
     Serial.println("Init OK");
     ESP32Can.onReceive(&CAN_RECEIVE);
   } else {
