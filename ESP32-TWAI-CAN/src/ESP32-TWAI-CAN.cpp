@@ -273,26 +273,65 @@ ESP_ERROR_CHECK(twai_reconfigure_alerts(
     NULL
 ));
 
+// Thay thế phần task trong hàm begin()
+
+// Start TWAI driver
+// Trong hàm begin(), sửa lại task creation:
+
 // Start TWAI driver
 if (twai_start() == ESP_OK) {
     LOG_TWAI("Driver started");
-    // Create a background task or attach ISR
-    xTaskCreatePinnedToCore([](void *arg) {
-        TwaiCAN *self = static_cast<TwaiCAN *>(arg);
-        uint32_t alerts;
-        CanFrame frame;
-        while (true) {
-            // Wait for CAN event (alert)
-            if (twai_read_alerts(&alerts, portMAX_DELAY) == ESP_OK) {
-                if (alerts & TWAI_ALERT_RX_DATA) {
-                    // Message received
-                    if (twai_receive(&frame, 0) == ESP_OK) {
-                        if (self->_rxCallback) self->_rxCallback(frame);
+    
+    // ✅ Tăng priority và stack size
+    xTaskCreatePinnedToCore(
+        [](void *arg) {
+            TwaiCAN *self = static_cast<TwaiCAN *>(arg);
+            uint32_t alerts;
+            CanFrame frame;
+            
+            while (true) {
+                // Wait for CAN event with timeout để tránh blocking vĩnh viễn
+                if (twai_read_alerts(&alerts, pdMS_TO_TICKS(100)) == ESP_OK) {
+                    
+                    if (alerts & TWAI_ALERT_RX_DATA) {
+                        // ✅ Đọc hết tất cả message trong queue
+                        int processedFrames = 0;
+                        while (twai_receive(&frame, 0) == ESP_OK && processedFrames < 50) {
+                            if (self->_rxCallback) {
+                                self->_rxCallback(frame);
+                            }
+                            processedFrames++;
+                        }
+                        
+                        // Debug: in số frame đã xử lý
+                        if (processedFrames > 10) {
+                            LOG_TWAI("Processed %d frames in batch", processedFrames);
+                        }
+                    }
+                    
+                    // Xử lý các alert khác
+                    if (alerts & TWAI_ALERT_ERR_PASS) {
+                        LOG_TWAI("Alert: Error Passive");
+                    }
+                    if (alerts & TWAI_ALERT_BUS_ERROR) {
+                        LOG_TWAI("Alert: Bus Error");
+                    }
+                    if (alerts & TWAI_ALERT_RX_QUEUE_FULL) {
+                        LOG_TWAI("WARNING: RX Queue Full!");
                     }
                 }
+                
+                // Yield nhỏ để không hog CPU
+                vTaskDelay(pdMS_TO_TICKS(1));
             }
-        }
-    }, "CAN_RX_TASK", 4096, this, 5, NULL, 1);
+        }, 
+        "CAN_RX_TASK",  // Task name
+        8192,           // ✅ Tăng stack từ 4096 → 8192 bytes
+        this,           // Task parameter
+        10,             // ✅ Tăng priority từ 5 → 10 (cao hơn)
+        NULL,           // Task handle
+        1               // Core 1 (tránh xung đột với WiFi trên core 0)
+    );
     
     ret = true;
 } else {

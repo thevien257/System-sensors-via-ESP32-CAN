@@ -110,8 +110,8 @@ class TwaiCAN {
     bool begin(TwaiSpeed              twaiSpeed = TWAI_SPEED_SIZE,
                int8_t                 txPin     = -1,
                int8_t                 rxPin     = -1,
-               uint16_t               txQueue   = 0xFFFF,
-               uint16_t               rxQueue   = 0xFFFF,
+               uint16_t               txQueue   = 200,
+               uint16_t               rxQueue   = 200,
                twai_filter_config_t*  fConfig   = nullptr,
                twai_general_config_t* gConfig   = nullptr,
                twai_timing_config_t*  tConfig   = nullptr);
@@ -152,8 +152,8 @@ class TwaiCAN {
     bool      init        = false;
     int8_t    tx          = 5;
     int8_t    rx          = 4;
-    uint16_t  txQueueSize = 5;
-    uint16_t  rxQueueSize = 5;
+    uint16_t  txQueueSize = 200;
+    uint16_t  rxQueueSize = 200;
     TwaiSpeed speed       = TWAI_SPEED_500KBPS;
 
     static void IRAM_ATTR onAlertHandler(void *arg);
