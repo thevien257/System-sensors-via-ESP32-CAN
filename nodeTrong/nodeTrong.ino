@@ -30,8 +30,8 @@ ESP32Timer ITimer1(1);  // Timer1 → RTC
 #define RTC_INTERVAL_MS 1000
 
 // ==== Flags ====
-volatile bool readDHTFlag = false;
-volatile bool readRTCFlag = false;
+bool readDHTFlag = false;
+bool readRTCFlag = false;
 
 // ==== ISR ====
 bool IRAM_ATTR TimerHandler0(void* timerNo) {
@@ -113,7 +113,7 @@ void handleRTCTask() {
 }
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
   delay(500);  // Cho hệ thống ổn định
 
   pinMode(BUTTON, INPUT_PULLUP);
@@ -132,7 +132,7 @@ void setup() {
   }
 
   if (!rtc.isrunning()) {
-    rtc.adjust(DateTime(2025, 10, 2, 8, 54, 0));
+    rtc.adjust(DateTime(2025, 10, 15, 7, 21, 0));
   }
 
   // ==== Timers ====
@@ -140,10 +140,7 @@ void setup() {
   ITimer1.attachInterruptInterval(RTC_INTERVAL_MS * 1000, TimerHandler1);
 
   // ==== Init CAN (có timeout & auto-reset) ====
-  ESP32Can.setPins(CAN_TX, CAN_RX);
-  delay(200);
-
-  if (ESP32Can.begin(ESP32Can.convertSpeed(500), CAN_TX, CAN_RX)) {
+  if (ESP32Can.begin(TWAI_SPEED_500KBPS, CAN_TX, CAN_RX)) {
 
   } else {
     Serial.println("CAN bus failed to start after retries! Restarting...");

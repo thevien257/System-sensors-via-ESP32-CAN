@@ -7,12 +7,9 @@
 #define LED 1
 #define TRIG 2
 #define ECHO 3
-#define MAX_DISTANCE 200  // cm
 
 // ==== Đối tượng cảm biến ====
-NewPing sonar(TRIG, ECHO, MAX_DISTANCE);
-
-hw_timer_t* Timer0_Cfg = NULL;
+NewPing sonar(TRIG, ECHO);
 
 // ==== Timer phần cứng cho LDR ====
 ESP32Timer ITimer0(0);  // Timer0 → LDR
@@ -23,16 +20,17 @@ ESP32Timer ITimer1(1);  // Timer1 cho Ultrasonic
 #define US_INTERVAL_MS 100
 
 // ==== Flags ====
-volatile bool readLDRFlag = false;
-volatile bool readUSFlag = false;
+bool readLDRFlag = false;
+bool readUSFlag = false;
 
 // ==== CAN Config ====
 #define CAN_TX 6
 #define CAN_RX 7
 
 // ==== ISR ====
-void IRAM_ATTR TimerHandler0() {
+bool IRAM_ATTR TimerHandler0(void* timerNo) {
   readLDRFlag = true;
+  return true;
 }
 bool IRAM_ATTR TimerHandler1(void* timerNo) {
   readUSFlag = true;
@@ -67,9 +65,9 @@ void handleUltrasonicTask() {
   CanFrame txFrame = { 0 };
   txFrame.identifier = 0x02;
   txFrame.extd = 0;
-  txFrame.data_length_code = 1;
-  txFrame.data[0] = distance;
-  // txFrame.data[1] = (distance >> 8) & 0xFF;
+  txFrame.data_length_code = 2;
+  txFrame.data[0] = distance & 0xFF;
+  txFrame.data[1] = (distance >> 8) & 0xFF;
 
   if (ESP32Can.writeFrame(txFrame)) {
     Serial.printf("Sent Distance = %d cm via CAN (ID: 0x02)\n", distance);
@@ -79,19 +77,14 @@ void handleUltrasonicTask() {
 }
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
 
   pinMode(LED, OUTPUT);
 
-  Timer0_Cfg = timerBegin(0, 80, true);
-  timerAttachInterrupt(Timer0_Cfg, &TimerHandler0, true);
-  timerAlarmWrite(Timer0_Cfg, LDR_INTERVAL_MS * 1000, true);
-  timerAlarmEnable(Timer0_Cfg);
-
   // Bật Timer0 cho LDR
-  // if (ITimer0.attachInterruptInterval(LDR_INTERVAL_MS * 1000, TimerHandler0)) {
-  //   Serial.println("Timer0 (LDR) started");
-  // }
+  if (ITimer0.attachInterruptInterval(LDR_INTERVAL_MS * 1000, TimerHandler0)) {
+    Serial.println("Timer0 (LDR) started");
+  }
 
   // Bật Timer1 cho Ultrasonic
   if (ITimer1.attachInterruptInterval(US_INTERVAL_MS * 1000, TimerHandler1)) {
@@ -99,10 +92,7 @@ void setup() {
   }
 
   // ==== CAN init có retry và reset ====
-  ESP32Can.setPins(CAN_TX, CAN_RX);
-  delay(200);
-
-  if (ESP32Can.begin(ESP32Can.convertSpeed(500), CAN_TX, CAN_RX)) {
+  if (ESP32Can.begin(TWAI_SPEED_500KBPS, CAN_TX, CAN_RX)) {
     Serial.println("CAN bus started successfully!");
   } else {
     Serial.println("CAN bus failed to start after retries! Restarting...");

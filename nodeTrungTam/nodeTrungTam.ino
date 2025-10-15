@@ -1,118 +1,95 @@
 #include <ESP32-TWAI-CAN.hpp>
-#include <SoftwareSerial.h>
 #include <Nextion.h>
+#include <SoftwareSerial.h>
 
-SoftwareSerial nextionSerial(18, 19);  // RX, TX
+SoftwareSerial nextionSerial(18, 19);
 
-// ==== Nextion components ====
-NexSlider sSlider = NexSlider(0, 3, "sSlider");
-NexText tTemp = NexText(0, 8, "tTemp");
-NexText tHumi = NexText(0, 7, "tHumi");
-NexText tDis = NexText(0, 11, "tDis");
 NexText tTime = NexText(0, 1, "tTime");
 NexText tDate = NexText(0, 2, "tDate");
+NexText tDis = NexText(0, 11, "tDis");
+NexText tTemp = NexText(0, 8, "tTemp");
+NexText tHumi = NexText(0, 7, "tHumi");
+NexSlider sSlider = NexSlider(0, 3, "sSlider");
 
-// ==== CAN config ====
-#define CAN_TX 1
-#define CAN_RX 0
+const int ENA = 4;
+const int IN1 = 5;
+const int IN2 = 6;
 
-// ==== Motor Driver pins ====
-const int PWM_CHANNEL = 0;
-const int PWM_FREQ = 5000;
-const int PWM_RESOLUTION = 12;
+const int CAN_TX = 1;
+const int CAN_RX = 0;
 
-#define ENA 4
-#define IN1 5
-#define IN2 6
+uint32_t currentSliderVal;
 
-const char *daysOfWeek[7] = {
-  "Sunday", "Monday", "Tuesday", "Wednesday",
-  "Thursday", "Friday", "Saturday"
-};
+const char
+  *daysOfWeek[7] = {
+    "Sunday", "Monday", "Tuesday", "Wednesday",
+    "Thursday", "Friday", "Saturday"
+  };
 
-// CAN RX Interrupt callback - processes everything immediately
-void onCANReceive(const CanFrame &frame) {
-  // DHT11 Temperature & Humidity (ID = 0x101)
-  if (frame.identifier == 0x01 && frame.data_length_code == 7) {
-    uint8_t hour = frame.data[0];
-    uint8_t minute = frame.data[1];
-    uint8_t second = frame.data[2];
-    uint8_t day = frame.data[3];
-    uint8_t month = frame.data[4];
-    uint16_t year = 2000 + frame.data[5];
-    uint8_t dow = frame.data[6];
+void CAN_RECEIVE(const CanFrame &rxFrame) {
+  char buff[64];
+  if (rxFrame.identifier == 0x01 && rxFrame.data_length_code == 7) {
+    uint8_t hour = rxFrame.data[0];
+    uint8_t min = rxFrame.data[1];
+    uint8_t sec = rxFrame.data[2];
+    uint8_t day = rxFrame.data[3];
+    uint8_t month = rxFrame.data[4];
+    uint16_t year = 2000 + rxFrame.data[5];
+    uint8_t dow = rxFrame.data[6];
 
-    char buf[64];
-    sprintf(buf, "%02d:%02d:%02d", hour, minute, second);
-    tTime.setText(buf);
+    /*%d = format as a decimal integer
+        0 = pad with zeros (instead of spaces)
+        2 = minimum width of 2 characters*/
+    sprintf(buff, "%02d:%02d:%02d", hour, min, sec);
+    tTime.setText(buff);
 
-    sprintf(buf, "%s %02d/%02d/%04d", daysOfWeek[dow], day, month, year);
-    tDate.setText(buf);
+    sprintf(buff, "%s/%02d/%02d/%04d", daysOfWeek[dow], day, month, year);
+    tDate.setText(buff);
   }
-  // Ultrasonic Distance (ID = 0x02)
-  if (frame.identifier == 0x02 && frame.data_length_code == 1) {
-    uint16_t distance = frame.data[0];
-
-    char buf[64];
-    sprintf(buf, "%dcm", distance);
-    tDis.setText(buf);
+  if (rxFrame.identifier == 0x02 && rxFrame.data_length_code == 2) {
+    uint16_t dis = rxFrame.data[0] | (rxFrame.data[1] << 8);
+    sprintf(buff, "%dcm", dis);
+    tDis.setText(buff);
   }
-  if (frame.identifier == 0x03 && frame.data_length_code == 4) {
-    int16_t temp_raw = frame.data[0] | (frame.data[1] << 8);
-    int16_t humi_raw = frame.data[2] | (frame.data[3] << 8);
-    float temp = temp_raw / 10.0;
-    float humi = humi_raw / 10.0;
 
-    char buf[64];
-    sprintf(buf, "%.1fC", temp);
-    tTemp.setText(buf);
+  if (rxFrame.identifier == 0x03 && rxFrame.data_length_code == 4) {
+    uint16_t temp = rxFrame.data[0] | (rxFrame.data[1] << 8);
+    uint16_t humi = rxFrame.data[2] | (rxFrame.data[3] << 8);
 
-    sprintf(buf, "%.1f%%", humi);
-    tHumi.setText(buf);
+    float tempF = temp / 10.0;
+    sprintf(buff, "%.1fC", tempF);
+    tTemp.setText(buff);
+
+    float humiF = humi / 10.0;
+    sprintf(buff, "%.1f%%", humiF);
+    tHumi.setText(buff);
   }
 }
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
   nextionSerial.begin(9600);
   nexInit();
-  delay(1000);
 
-  // ==== Motor setup ====
+  pinMode(ENA, OUTPUT);
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
+
   digitalWrite(IN1, HIGH);
   digitalWrite(IN2, LOW);
 
-  ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
-  ledcAttachPin(ENA, PWM_CHANNEL);
-
-  Serial.println("CAN Receiver with Interrupts");
-
-  // Set CAN pins
-  ESP32Can.setPins(CAN_TX, CAN_RX);
-
-  // Start CAN bus
-  if (ESP32Can.begin(ESP32Can.convertSpeed(500), CAN_TX, CAN_RX)) {
-    Serial.println("CAN bus started successfully!");
-
-    // Register interrupt callback
-    ESP32Can.onReceive(onCANReceive);
-
+  if (ESP32Can.begin(TWAI_SPEED_500KBPS, CAN_TX, CAN_RX)) {
+    Serial.println("Init OK");
+    ESP32Can.onReceive(&CAN_RECEIVE);
   } else {
-    Serial.println("CAN bus failed to start!");
+    Serial.println("Init ERROR");
     while (1)
       ;
   }
 }
 
 void loop() {
-
-  uint32_t currentSliderValue = 0;
-
-  if (sSlider.getValue(&currentSliderValue)) {
-    ledcWrite(PWM_CHANNEL, currentSliderValue);
+  if (sSlider.getValue(&currentSliderVal)) {
+    analogWrite(ENA, currentSliderVal);
   }
-
-  delay(10);
 }
